@@ -36,6 +36,35 @@ uint8_t byte0, byte1;
 uint16_t dac_input;
 
 
+/* Given a digital DAC input, set the analog DAC output.
+ * 
+ * Args:
+ *  input: 12 bit digital input of the DAC (0 to 4095).
+ */
+void set_dac_output(uint16_t input) {
+  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  digitalWrite(CS, LOW);
+  delay(50);
+  byte0 = (DAC_SETTINGS | (input >> 8));
+  byte1 = (input & 0xFF);
+  SPI.transfer(byte0);
+  SPI.transfer(byte1);
+  Serial.print(byte0);
+  Serial.print("  ");
+  Serial.println(byte1);
+  delay(50);
+  digitalWrite(CS, HIGH);
+  digitalWrite(LDAC, LOW);
+  delay(50);
+  digitalWrite(LDAC, HIGH);
+  SPI.endTransaction();
+  digitalWrite(LED, HIGH);
+  delay(200);
+  digitalWrite(LED, LOW);
+  delay(50);
+}
+
+
 void setup() {
   Serial.begin(9600);
   
@@ -69,33 +98,4 @@ void setup() {
 void loop() {
   dac_input = analogRead(POT);
   set_dac_output(dac_input);
-}
-
-
-/* Given a digital DAC input, set the analog DAC output.
- * 
- * Args:
- *  input: 12 bit digital input of the DAC (0 to 4095).
- */
-void set_dac_output(uint16_t input) {
-  SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
-  digitalWrite(CS, LOW);
-  delay(50);
-  byte0 = (DAC_SETTINGS | (input >> 8));
-  byte1 = (input & 0xFF);
-  SPI.transfer(byte0);
-  SPI.transfer(byte1);
-  Serial.print(byte0);
-  Serial.print("  ");
-  Serial.println(byte1);
-  delay(50);
-  digitalWrite(CS, HIGH);
-  digitalWrite(LDAC, LOW);
-  delay(50);
-  digitalWrite(LDAC, HIGH);
-  SPI.endTransaction();
-  digitalWrite(LED, HIGH);
-  delay(200);
-  digitalWrite(LED, LOW);
-  delay(50);
 }

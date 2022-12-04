@@ -65,6 +65,36 @@ void set_dac_output(uint16_t input) {
 }
 
 
+// Set up the SMU to source voltage and measure current.
+ void svmc() {
+  digitalWrite(RSENSE_TO_FEEDBACK, LOW);
+  digitalWrite(DUT_TO_ADC, LOW);
+  digitalWrite(RSENSE_VOLTAGE_SELECT, LOW);
+  digitalWrite(DUT_VOLTAGE_SELECT, HIGH);
+  digitalWrite(TEN_K_OHM, LOW);
+  digitalWrite(ONE_HUNDRED_K_OHM, LOW);
+  digitalWrite(ONE_MILLION_OHM, LOW);
+  digitalWrite(TWO_HUNDRED_OHM, HIGH);
+  digitalWrite(DUT_TO_FEEDBACK, HIGH);
+  digitalWrite(RSENSE_TO_ADC, HIGH);
+  Serial.print("Current: ");
+  Serial.print(analogRead(ADC) * (3.3 / 4096) * ((12700 + 4750) / 4750) / 200 * 1000);
+  Serial.println(" mA");
+ }
+
+ void scmv() {
+  digitalWrite(DUT_TO_FEEDBACK, LOW);
+  digitalWrite(RSENSE_TO_ADC, LOW);
+  digitalWrite(DUT_VOLTAGE_SELECT, LOW);
+  digitalWrite(RSENSE_VOLTAGE_SELECT, HIGH);
+  digitalWrite(TWO_HUNDRED_OHM, LOW);
+  digitalWrite(RSENSE_TO_FEEDBACK, HIGH);
+  digitalWrite(DUT_TO_ADC, HIGH);
+  // TODO: select Rsense
+  // TODO: print measured voltage
+ }
+
+
 void setup() {
   Serial.begin(9600);
   
@@ -104,23 +134,16 @@ void loop() {
     smu_mode = 1;
   }
 
+  //TODO: print out corresponding voltage or current based on potentiometer value
   if (dac_input != analogRead(POT)) {
     dac_input = analogRead(POT);
     set_dac_output(dac_input);
   }
 
   if (smu_mode == 0) {
-    digitalWrite(RSENSE_TO_FEEDBACK, LOW);
-    digitalWrite(DUT_TO_ADC, LOW);
-    digitalWrite(DUT_VOLTAGE_SELECT, HIGH);
-    digitalWrite(RSENSE_VOLTAGE_SELECT, LOW);
-    digitalWrite(TEN_K_OHM, LOW);
-    digitalWrite(ONE_HUNDRED_K_OHM, LOW);
-    digitalWrite(ONE_MILLION_OHM, LOW);
-    digitalWrite(TWO_HUNDRED_OHM, HIGH);
-    digitalWrite(DUT_TO_FEEDBACK, HIGH);
-    digitalWrite(RSENSE_TO_ADC, HIGH);
-    Serial.print("Current: ");
-    Serial.println(analogRead(ADC) * ((12700 + 4750) / 4750) / 200);
+    svmc();
+  }
+  else{
+    scmv();
   }
 }

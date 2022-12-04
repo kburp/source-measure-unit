@@ -35,6 +35,9 @@ const uint8_t DAC_SETTINGS = (BUF << 6) | (GA << 5) | (SHDN_BIT << 4);
 uint8_t byte0, byte1;
 uint16_t dac_input;
 
+// Mode 0 is SVMC, Mode 1 is SCMV
+uint8_t smu_mode = 0;
+
 
 /* Given a digital DAC input, set the analog DAC output.
  * 
@@ -49,9 +52,6 @@ void set_dac_output(uint16_t input) {
   byte1 = (input & 0xFF);
   SPI.transfer(byte0);
   SPI.transfer(byte1);
-  Serial.print(byte0);
-  Serial.print("  ");
-  Serial.println(byte1);
   delay(50);
   digitalWrite(CS, HIGH);
   digitalWrite(LDAC, LOW);
@@ -96,6 +96,31 @@ void setup() {
 
 
 void loop() {
-  dac_input = analogRead(POT);
-  set_dac_output(dac_input);
+  if (digitalRead(SVMC) == LOW) {
+    smu_mode = 0;
+  }
+  
+  if (digitalRead(SCMV) == LOW) {
+    smu_mode = 1;
+  }
+
+  if (dac_input != analogRead(POT)) {
+    dac_input = analogRead(POT);
+    set_dac_output(dac_input);
+  }
+
+  if (smu_mode == 0) {
+    digitalWrite(RSENSE_TO_FEEDBACK, LOW);
+    digitalWrite(DUT_TO_ADC, LOW);
+    digitalWrite(DUT_VOLTAGE_SELECT, HIGH);
+    digitalWrite(RSENSE_VOLTAGE_SELECT, LOW);
+    digitalWrite(TEN_K_OHM, LOW);
+    digitalWrite(ONE_HUNDRED_K_OHM, LOW);
+    digitalWrite(ONE_MILLION_OHM, LOW);
+    digitalWrite(TWO_HUNDRED_OHM, HIGH);
+    digitalWrite(DUT_TO_FEEDBACK, HIGH);
+    digitalWrite(RSENSE_TO_ADC, HIGH);
+    Serial.print("Current: ");
+    Serial.println(analogRead(ADC) * ((12700 + 4750) / 4750) / 200);
+  }
 }

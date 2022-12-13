@@ -33,9 +33,11 @@ const uint16_t GA = 1; // 0 for 2X gain, 1 for 1X gain
 const uint16_t SHDN_BIT = 1; // 0 for shutdown, 1 for normal operation
 const uint8_t DAC_SETTINGS = (BUF << 6) | (GA << 5) | (SHDN_BIT << 4);
 uint8_t byte0, byte1;
+uint16_t pot_value;
 uint16_t dac_input;
 
-uint8_t smu_mode = 0; // Mode 0 is SVMC, Mode 1 is SCMV
+uint8_t smu_mode; // Mode 0 is SVMC, Mode 1 is SCMV
+unsigned long time_last_mc, time_last_mv; // Keep track of the time of last measurement
 
 //TEMPORARY VALUES FOR TESTING
 const uint8_t SHDN = 18;
@@ -44,12 +46,13 @@ const uint8_t MODE_INPUT = 20;
 
 
 /* 
- * Given a digital DAC input, set the analog DAC output.
+ * Given a digital DAC input, set the analog DAC output
  * 
  * Args:
- *  input: 12 bit digital input of the DAC (0 to 4095).
+ *  input: 12 bit digital input of the DAC (0 to 4095)
  */
 void set_dac_output(uint16_t input) {
+  digitalWrite(LED, HIGH);
   SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
   digitalWrite(CS, LOW);
   byte0 = (DAC_SETTINGS | (input >> 8));
@@ -62,16 +65,17 @@ void set_dac_output(uint16_t input) {
   delay(5);
   digitalWrite(LDAC, HIGH);
   SPI.endTransaction();
-  digitalWrite(LED, HIGH);
-  delay(200);
+  delay(50);
   digitalWrite(LED, LOW);
 }
 
 
 /* 
- * Set up the SMU to source voltage and measure current.
+ * Set up the SMU to source voltage and measure current
  */
- void svmc() {
+void set_svmc() {
+  smu_mode = 0;
+  pot_value = 0;
   digitalWrite(RSENSE_TO_FEEDBACK, LOW);
   digitalWrite(DUT_TO_ADC, LOW);
   digitalWrite(RSENSE_VOLTAGE_SELECT, LOW);
@@ -82,16 +86,16 @@ void set_dac_output(uint16_t input) {
   digitalWrite(TWO_HUNDRED_OHM, HIGH);
   digitalWrite(DUT_TO_FEEDBACK, HIGH);
   digitalWrite(RSENSE_TO_ADC, HIGH);
-  Serial.print("Current Measured: ");
-  Serial.print(analogRead(ADC) * (3.3 / 4096.0) * ((12700 + 4750) / 4750.0) / 200.0 * 1000.0);
-  Serial.println(" mA");
-  delay(50);
+  Serial.println("Mode Changed: Source Voltage, Measure Current");
  }
 
- /*
-  * Set up the SMU to source current and measure voltage;
-  */
- void scmv() {
+
+/*
+ * Set up the SMU to source current and measure voltage
+ */
+void set_scmv() {
+  smu_mode = 1;
+  pot_value = 0;
   digitalWrite(DUT_TO_FEEDBACK, LOW);
   digitalWrite(RSENSE_TO_ADC, LOW);
   digitalWrite(DUT_VOLTAGE_SELECT, LOW);
@@ -99,13 +103,16 @@ void set_dac_output(uint16_t input) {
   digitalWrite(TWO_HUNDRED_OHM, LOW);
   digitalWrite(RSENSE_TO_FEEDBACK, HIGH);
   digitalWrite(DUT_TO_ADC, HIGH);
-  // TODO: select Rsense
-  // TODO: print measured voltage
+  Serial.println("Mode Changed: Source Current, Measure Voltage");
  }
 
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("Starting SMU");
+
+  time_last_mc = millis();
+  time_last_mv = millis();
   
   SPI.setCS(CS);
   SPI.setSCK(CLOCK);
@@ -144,32 +151,77 @@ void setup() {
   digitalWrite(LDAC, HIGH);
 
   SPI.begin();
+
+  set_svmc();
+
+  delay(1001);
 }
 
 
 void loop() {
   if (digitalRead(SVMC) == LOW && smu_mode == 1) {
-    smu_mode = 0;
-    Serial.println("Mode Changed: Source Voltage, Measure Current");
+    set_svmc();
   }
   else if (digitalRead(SCMV) == LOW && smu_mode == 0) {
-    smu_mode = 1;
-    Serial.println("Mode Changed: Source Current, Measure Voltage");
+    set_scmv();
   }
 
-  //TODO: print out corresponding voltage or current based on potentiometer value
-  if (abs(dac_input - analogRead(POT)) > 4) {
-    dac_input = analogRead(POT);
+  if (abs(pot_value - analogRead(POT)) > 4) {
+    pot_value = analogRead(POT);
+    if (smu_mode == 0) {
+      dac_input = pot_value;
+      Serial.print("Supply Voltage: ");
+      Serial.print(3.3 * dac_input / 4096.0 * ((12700 + 4750) / 4750.0));
+      Serial.println(" V");
+    }
+    else {
+      Serial.print("Supply Current: ");
+      if (pot_value < 1024) {
+        dac_input = pot_value * 4;
+        digitalWrite(TWO_HUNDRED_OHM, LOW);
+        digitalWrite(TEN_K_OHM, LOW);
+        digitalWrite(ONE_HUNDRED_K_OHM, LOW);
+        digitalWrite(ONE_MILLION_OHM, HIGH);
+        Serial.print(dac_input * 3.3 / 4096.0 * ((12700 + 4750) / 4750.0) / 1000.0);
+      }
+      else if (pot_value < 2048) {
+        dac_input = (pot_value - 1024) * 4;
+        digitalWrite(TWO_HUNDRED_OHM, LOW);
+        digitalWrite(TEN_K_OHM, LOW);
+        digitalWrite(ONE_MILLION_OHM, LOW);
+        digitalWrite(ONE_HUNDRED_K_OHM, HIGH);
+        Serial.print(dac_input * 3.3 / 4096.0 * ((12700 + 4750) / 4750.0) / 100.0);
+      }
+      else if (pot_value < 3072) {
+        dac_input = (pot_value - 2048) * 4;
+        digitalWrite(TWO_HUNDRED_OHM, LOW);
+        digitalWrite(ONE_HUNDRED_K_OHM, LOW);
+        digitalWrite(ONE_MILLION_OHM, LOW);
+        digitalWrite(TEN_K_OHM, HIGH);
+        Serial.print(dac_input * 3.3 / 4096.0 * ((12700 + 4750) / 4750.0) / 10.0);
+      }
+      else {
+        dac_input = (pot_value - 3072) * 4;
+        digitalWrite(TEN_K_OHM, LOW);
+        digitalWrite(ONE_HUNDRED_K_OHM, LOW);
+        digitalWrite(ONE_MILLION_OHM, LOW);
+        digitalWrite(TWO_HUNDRED_OHM, HIGH); 
+        Serial.print(dac_input * 3.3 / 4096.0 * ((12700 + 4750) / 4750.0) * 5.0);
+      }
+      Serial.println(" mA");
+    }
     set_dac_output(dac_input);
-    Serial.print("Voltage Supply: ");
-    Serial.print(3.3 * dac_input / 4096.0);
-    Serial.println(" V");
   }
 
-  if (smu_mode == 0) {
-    svmc();
+  if (smu_mode == 0 && (millis() - time_last_mc > 1000)) {
+    time_last_mc = millis();
+    Serial.print("Current Measured: ");
+    Serial.print(analogRead(ADC) * (3.3 / 4096.0) * ((12700 + 4750) / 4750.0) / 200.0 * 1000.0);
+    Serial.println(" mA");
   } 
-  else {
-    scmv();
+  else if (smu_mode == 1 && (millis() - time_last_mv > 1000)) {
+    time_last_mv = millis();
+    Serial.print("Voltage Measured: ");
+    Serial.print(analogRead(ADC) * (3.3 / 4096.0) * ((12700 + 4750) / 4750.0));
   }
 }

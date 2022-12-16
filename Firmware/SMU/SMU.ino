@@ -39,11 +39,6 @@ uint16_t dac_input;
 uint8_t smu_mode; // Mode 0 is SVMC, Mode 1 is SCMV
 unsigned long time_last_mc, time_last_mv; // Keep track of the time of last measurement
 
-//TEMPORARY VALUES FOR TESTING
-const uint8_t SHDN = 18;
-const uint8_t POWER = 19;
-const uint8_t MODE_INPUT = 20;
-
 
 /* 
  * Given a digital DAC input, set the analog DAC output
@@ -117,14 +112,6 @@ void setup() {
   SPI.setCS(CS);
   SPI.setSCK(CLOCK);
   SPI.setTX(SDI);
-
-  //TEMPORARY VALUES FOR TESTING
-  pinMode(SHDN, OUTPUT);
-  pinMode(POWER, OUTPUT);
-  pinMode(MODE_INPUT, OUTPUT);
-  digitalWrite(POWER, HIGH);
-  digitalWrite(SHDN, HIGH);
-  digitalWrite(MODE_INPUT, HIGH);
 
   pinMode(CS, OUTPUT);
   pinMode(CLOCK, OUTPUT);
@@ -223,5 +210,6 @@ void loop() {
     time_last_mv = millis();
     Serial.print("Voltage Measured: ");
     Serial.print(analogRead(ADC) * (3.3 / 4096.0) * ((12700 + 4750) / 4750.0));
+    Serial.println(" V");
   }
 }
